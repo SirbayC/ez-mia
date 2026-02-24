@@ -8,8 +8,8 @@ from .config import AttackConfig, make_arg_parser, load_attack_config_from_yaml
 from .attack import run_attack
 
 
-def append_result_csv(row: dict):
-	output_path = Path(__file__).parent / "results.csv"
+def append_result_csv(row: dict, out_dir: str | None = None):
+	output_path = Path(out_dir) / "results.csv" if out_dir else Path(__file__).parent / "results.csv"
 	file_exists = output_path.exists()
 	with output_path.open("a", newline="") as file_obj:
 		writer = csv.writer(file_obj)
@@ -30,7 +30,7 @@ def main():
 		cfg = load_attack_config_from_yaml(args.config)
 		res = run_attack(cfg)
 		print(f"{cfg.dataset}, model={cfg.model_name}, ref={cfg.ref_variant}, AUC={res['auc']:.6f}, TPR@0.1%FPR={res['tpr_at_fpr_0.001']:.3f}")
-		append_result_csv(res)
+		append_result_csv(res, out_dir=cfg.save_artifacts_path or None)
 		return
 
 	cfg = AttackConfig(
@@ -65,7 +65,7 @@ def main():
 	)
 	res = run_attack(cfg)
 	print(f"{args.dataset}, model={cfg.model_name}, ref={cfg.ref_variant}, AUC={res['auc']:.6f}, TPR@0.1%FPR={res['tpr_at_fpr_0.001']:.3f}")
-	append_result_csv(res)
+	append_result_csv(res, out_dir=cfg.save_artifacts_path or None)
 
 
 if __name__ == "__main__":

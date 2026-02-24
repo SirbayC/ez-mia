@@ -8,17 +8,24 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --mem-per-cpu=8000M
 #SBATCH --account=Education-EEMCS-Courses-CSE3000
-#SBATCH --output=/scratch/cosminvasilesc/TRAWIC/outputs/logs/slurm-%j.out
+#SBATCH --output=/scratch/cosminvasilesc/EZ-MIA/ez-mia/outputs/logs/slurm-%j.out
+
+# One-time setup for code config:
+# export HF_HOME="/scratch/cosminvasilesc/HF_CACHE"
+# export HF_TOKEN=<token>
+# hf download stabilityai/stable-code-3b
+# hf download --repo-type dataset codeparrot/github-code-clean
 
 # PREFLIGHT CHECKS:
 # - time
 # - partition
 # - limit inference ? --max_infer_samples=100 \
+# - base config
 
 set -euo pipefail
 
-ROOT_DIR="/scratch/cosminvasilesc/TRAWIC"
-REPO_DIR="$ROOT_DIR/TraWiC"
+ROOT_DIR="/scratch/cosminvasilesc/EZ-MIA"
+REPO_DIR="$ROOT_DIR/ez-mia"
 CONDA_ENV_PATH="$ROOT_DIR/ENV"
 HF_CACHE_DIR="/scratch/cosminvasilesc/HF_CACHE"
 
@@ -52,36 +59,23 @@ echo "=========================================="
 
 cd "$REPO_DIR"
 
-# ── Step 1: Model Inference ────────────────────────────────────────────────────
-echo "[$(date)] Running SantaCoder inference..."
-python -u src/main_santacoder.py \
-  --output_dir="$OUTDIR"
+# ── Step 1: Prepare the Dynamic Configuration ────────────────────────────────
+echo "[$(date)] Preparing dynamic config for this run..."
 
-# ── Step 2: Build Classification Dataset ──────────────────────────────────────
-echo "[$(date)] Building classification dataset..."
-python -u src/data/dataset_builder.py \
-  --input_dir="$OUTDIR" \
-  --output_dir="$OUTDIR/rf_data" \
-  --syntactic_threshold=100 \
-  --semantic_threshold=20
+# We create a temporary copy of the YAML in the output directory
+RUN_CONFIG="$OUTDIR/exp_swallow_code_stablecode_base_run.yaml"
+cp configs/exp_swallow_code_stablecode_base.yaml "$RUN_CONFIG"
 
-# ── Step 3: Train Classifier ───────────────────────────────────────────────────
-echo "[$(date)] Training Random Forest classifier..."
-python -u src/inspector_train.py \
-  --input_dir="$OUTDIR/rf_data" \
-  --output_dir="$OUTDIR" \
-  --syntactic_threshold=100 \
-  --semantic_threshold=20 \
-  --visualisation=True
+# Use 'sed' to replace the empty save_artifacts_path: "" with our new $OUTDIR
+sed -i "s|save_artifacts_path: \"\"|save_artifacts_path: \"$OUTDIR\"|g" "$RUN_CONFIG"
 
-# ── Step 4: Evaluate Classifier ────────────────────────────────────────────────
-echo "[$(date)] Evaluating classifier..."
-python -u src/inspector_test.py \
-  --input_dir="$OUTDIR/rf_data" \
-  --model_dir="$OUTDIR" \
-  --output_dir="$OUTDIR" \
-  --syntactic_threshold=100 \
-  --semantic_threshold=20
+
+# ── Step 2: Run the EZ-MIA Pipeline ──────────────────────────────────────────
+echo "[$(date)] Starting EZ-MIA attack pipeline..."
+
+# EZ-MIA runs as a module, passing our newly created run-specific YAML
+python -u -m mia --config "$RUN_CONFIG"
+
 
 echo "=========================================="
 echo "Job completed at: $(date)"
