@@ -122,6 +122,8 @@ def _texts_to_tail_sequences(texts: List[str], *, sequence_length: int) -> List[
 	return sequences
 def _streaming_text_iterator(dataset_name: str, *, text_selector, seed_val: int, ds_config: str | None = None, split: str = "train", max_skip: int = 5000, **load_kwargs):
 	"""Yield texts from a streaming dataset with a seed-driven random offset per restart."""
+	# 'languages' was a loading-script param; Parquet datasets expose a 'language' column instead.
+	filter_languages = load_kwargs.pop("languages", None)
 	rng_local = np.random.RandomState(seed_val)
 	attempts = 0
 	while attempts < 20:
@@ -129,6 +131,8 @@ def _streaming_text_iterator(dataset_name: str, *, text_selector, seed_val: int,
 			ds_iter = load_dataset(dataset_name, split=split, streaming=True, **load_kwargs)
 		else:
 			ds_iter = load_dataset(dataset_name, ds_config, split=split, streaming=True, **load_kwargs)
+		if filter_languages is not None:
+			ds_iter = ds_iter.filter(lambda ex: ex.get("language") in filter_languages)
 		it = iter(ds_iter)
 		skip = int(rng_local.randint(0, max_skip + 1))
 		for _ in range(skip):
