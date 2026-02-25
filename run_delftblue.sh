@@ -8,7 +8,7 @@
 #SBATCH --gpus-per-task=1
 #SBATCH --mem-per-cpu=8000M
 #SBATCH --account=Education-EEMCS-Courses-CSE3000
-#SBATCH --output=/scratch/cosminvasilesc/EZ-MIA/ez-mia/outputs/logs/slurm-%j.out
+#SBATCH --output=/scratch/cosminvasilesc/EZ-MIA/outputs/logs/slurm-%j.out
 
 # One-time setup for code config:
 # export HF_HOME="/scratch/cosminvasilesc/HF_CACHE"
