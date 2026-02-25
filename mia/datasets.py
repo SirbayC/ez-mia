@@ -125,9 +125,9 @@ def _streaming_text_iterator(dataset_name: str, *, text_selector, seed_val: int,
 	attempts = 0
 	while attempts < 20:
 		if ds_config is None:
-			ds_iter = load_dataset(dataset_name, split=split, streaming=True, **load_kwargs)
+			ds_iter = load_dataset(dataset_name, split=split, streaming=False, **load_kwargs)
 		else:
-			ds_iter = load_dataset(dataset_name, ds_config, split=split, streaming=True, **load_kwargs)
+			ds_iter = load_dataset(dataset_name, ds_config, split=split, streaming=False, **load_kwargs)
 		it = iter(ds_iter)
 		skip = int(rng_local.randint(0, max_skip + 1))
 		for _ in range(skip):
