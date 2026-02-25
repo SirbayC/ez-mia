@@ -59,8 +59,8 @@ STREAM_SEQUENCE_BUFFER_TARGET = 200_000
 
 
 def load_dataset(*args, **kwargs):
-	"""Wrapper enabling remote dataset scripts (needed for xsum on datasets<3)."""
-	kwargs.setdefault("trust_remote_code", True)
+	"""Thin wrapper around hf_load_dataset. trust_remote_code is no longer supported in datasets>=3."""
+	kwargs.pop("trust_remote_code", None)
 	return hf_load_dataset(*args, **kwargs)
 
 
