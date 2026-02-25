@@ -42,7 +42,7 @@ _PREFIX_SOURCES = {
 		"languages": ["Python"],
 		"split": "train",
 		"text_fields": ["code"],
-		"streaming": True,
+		"streaming": False,
 	},
 	"swallow-code": {  # alias
 		"type": "hf_dataset",
@@ -50,7 +50,7 @@ _PREFIX_SOURCES = {
 		"languages": ["Python"],
 		"split": "train",
 		"text_fields": ["code"],
-		"streaming": True,
+		"streaming": False,
 	},
 }
 
