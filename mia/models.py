@@ -120,7 +120,8 @@ def build_model(
     lora_dropout: float = 0.05,
     lora_target_modules: list[str] | None = None,
 ) -> AutoModelForCausalLM:
-    model = _load_auto_model(model_name)
+    dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float16
+    model = _load_auto_model(model_name, dtype=dtype)
     if tokenizer.pad_token is not None and getattr(model.config, "pad_token_id", None) is None:
         model.resize_token_embeddings(len(tokenizer))
         model.config.pad_token_id = tokenizer.pad_token_id
