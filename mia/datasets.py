@@ -13,6 +13,7 @@ class Example:
 	text: str
 	label: int
 
+LOCAL_CODE_DATASET = "/scratch/cosminvasilesc/HF_CACHE/hub/datasets--codeparrot--github-code-clean/snapshots/c48d40f9e70f0196f8236901ee35807f7d6c44c0"
 
 _PREFIX_SOURCES = {
 	"wikitext": {
@@ -38,19 +39,19 @@ _PREFIX_SOURCES = {
 	},
 	"tokyotech-llm/swallow-code": {
 		"type": "hf_dataset",
-		"name": "codeparrot/github-code-clean",
+		"name": LOCAL_CODE_DATASET,
 		"languages": ["Python"],
 		"split": "train",
 		"text_fields": ["code"],
-		"streaming": False,
+		"streaming": True,
 	},
 	"swallow-code": {  # alias
 		"type": "hf_dataset",
-		"name": "codeparrot/github-code-clean",
+		"name": LOCAL_CODE_DATASET,
 		"languages": ["Python"],
 		"split": "train",
 		"text_fields": ["code"],
-		"streaming": False,
+		"streaming": True,
 	},
 }
 
@@ -125,9 +126,9 @@ def _streaming_text_iterator(dataset_name: str, *, text_selector, seed_val: int,
 	attempts = 0
 	while attempts < 20:
 		if ds_config is None:
-			ds_iter = load_dataset(dataset_name, split=split, streaming=False, **load_kwargs)
+			ds_iter = load_dataset(dataset_name, split=split, streaming=True, **load_kwargs)
 		else:
-			ds_iter = load_dataset(dataset_name, ds_config, split=split, streaming=False, **load_kwargs)
+			ds_iter = load_dataset(dataset_name, ds_config, split=split, streaming=True, **load_kwargs)
 		it = iter(ds_iter)
 		skip = int(rng_local.randint(0, max_skip + 1))
 		for _ in range(skip):
@@ -252,7 +253,7 @@ def sample_splits(
 				if k in ex:
 					return ex[k]
 			return ex[next(iter(ex.keys()))]
-		text_iter = _streaming_text_iterator("codeparrot/github-code-clean", text_selector=pick_text, seed_val=seed, languages=["Python"])
+		text_iter = _streaming_text_iterator(LOCAL_CODE_DATASET, text_selector=pick_text, seed_val=seed, languages=["Python"])
 		tm = train_total // 2; em = eval_total // 2; tn = train_total // 2; en = eval_total // 2
 		member_needed = tm + em
 		nonmember_needed = tn + en
@@ -640,7 +641,7 @@ def sample_validation_texts(
 		return buffer[:N]
 	elif ls in {"tokyotech-llm/swallow-code", "swallow-code"}:
 		pick_text = lambda ex: ex.get("text", ex.get("content", ex.get("code", ex.get("docstring", ex.get("source", "")))))
-		text_iter = _streaming_text_iterator("codeparrot/github-code-clean", text_selector=pick_text, seed_val=seed + 999, languages=["Python"])
+		text_iter = _streaming_text_iterator(LOCAL_CODE_DATASET, text_selector=pick_text, seed_val=seed + 999, languages=["Python"])
 		buffer_texts = _collect_streaming_texts(
 			text_iter,
 			min_required=min(STREAM_SEQUENCE_BUFFER_TARGET, N * 2),
