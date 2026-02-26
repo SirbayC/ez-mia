@@ -73,6 +73,9 @@ sed -i "s|save_artifacts_path: \"\"|save_artifacts_path: \"$OUTDIR\"|g" "$RUN_CO
 # ── Step 2: Run the EZ-MIA Pipeline ──────────────────────────────────────────
 echo "[$(date)] Starting EZ-MIA attack pipeline..."
 
+# Reduce tqdm update frequency for cleaner log files
+export TQDM_MININTERVAL=10
+
 # EZ-MIA runs as a module, passing our newly created run-specific YAML
 python -u -m mia --config "$RUN_CONFIG"
 
