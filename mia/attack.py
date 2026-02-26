@@ -132,14 +132,20 @@ def run_attack(cfg: AttackConfig) -> Dict[str, Any]:
 	else:
 		use_lora = (cfg.model_name.lower() != "gpt2")
 
+	tqdm.write(f"[model] Building reference model (use_lora={use_lora})...")
 	ref_model = build_model(cfg.model_name, tokenizer, device, use_lora=False)
+	tqdm.write("[model] Reference model built successfully")
 
 	ref_model.to("cpu") # Move to cpu to prevent OOM
+	tqdm.write("[model] Reference model moved to CPU")
 
 	if len(domain_val_texts) < requested_val_total:
 		raise ValueError(f"Requested {requested_val_total} domain validation texts but only received {len(domain_val_texts)}; validation set is mandatory.")
+	tqdm.write("[data] Preparing validation dataloader...")
 	target_val_dataloader = prepare_lm_dataloader(tokenizer, target_val_texts, batch_size=cfg.batch_size, device=device, sequence_length=cfg.sequence_length)
+	tqdm.write("[data] Validation dataloader ready")
 
+	tqdm.write(f"[target] Building target model (use_lora={use_lora})...")
 	tqdm.write(f"[target] Training target model on {len(target_member_examples)} target members...")
 	target_model = build_model(
 		cfg.model_name,
@@ -151,15 +157,21 @@ def run_attack(cfg: AttackConfig) -> Dict[str, Any]:
 		lora_dropout=cfg.lora_dropout,
 		lora_target_modules=cfg.lora_target_modules,
 	)
+	tqdm.write("[target] Target model built successfully")
 	_target_texts = [x.text for x in target_member_examples]
+	tqdm.write("[target] Preparing training dataloader...")
 	dl_target = prepare_lm_dataloader(tokenizer, _target_texts, batch_size=cfg.batch_size, device=device, sequence_length=cfg.sequence_length)
+	tqdm.write(f"[target] Starting fine-tuning ({cfg.epochs} epochs, lr={cfg.lr})...")
 	_ = finetune_target(target_model, dl_target, epochs=cfg.epochs, lr=cfg.lr, val_dataloader=target_val_dataloader, load_best_on_val=True)
+	tqdm.write("[target] Fine-tuning completed")
 	
 	target_model.to("cpu") # Move to CPU to prevent OOM
 	torch.cuda.empty_cache()
+	tqdm.write("[target] Target model moved to CPU, GPU cache cleared")
 
 	if cfg.ref_variant == "distillation":
 		tqdm.write("[reference] Building reference model via distillation from target model...")
+		tqdm.write(f"[distillation] Parameters: max_prompts={cfg.distil_max_prompts}, completions={cfg.distil_completions}, max_new_tokens={cfg.distil_max_new_tokens}")
 		ref_model = build_distillation_reference(
 			tokenizer,
 			target_model,
@@ -183,8 +195,10 @@ def run_attack(cfg: AttackConfig) -> Dict[str, Any]:
 			val_texts=domain_val_texts,
 			sequence_length=cfg.sequence_length,
 		)
+		tqdm.write("[distillation] Reference model built successfully")
 	elif cfg.ref_variant == "sft":
 		tqdm.write("[reference] Building reference model via SFT on domain non-members...")
+		tqdm.write(f"[sft] Parameters: epochs={cfg.sft_train_epochs}, batch={cfg.sft_train_batch}, lr={cfg.sft_train_lr}")
 		ref_model = build_sft_reference(
 			tokenizer,
 			device,
@@ -201,14 +215,24 @@ def run_attack(cfg: AttackConfig) -> Dict[str, Any]:
 			val_texts=domain_val_texts,
 			sequence_length=cfg.sequence_length,
 		)
+		tqdm.write("[sft] Reference model built successfully")
+	else:
+		tqdm.write(f"[reference] Using base model as reference (ref_variant={cfg.ref_variant})")
 	
 	ref_model.to("cpu") # Move to CPU to prevent OOM
 	torch.cuda.empty_cache()
+	tqdm.write("[reference] Reference model moved to CPU, GPU cache cleared")
 
-	tqdm.write("[eval] Computing EZ scores from target_model + reference_model on target data...")
+	tqdm.write("[eval] Preparing to compute EZ scores...")
+	tqdm.write(f"[eval] Members to score: {len(target_member_examples)}, Non-members to score: {len(target_nonmember_examples)}")
+	tqdm.write("[eval] Computing EZ scores for member samples...")
 	scores_m = compute_ez_scores(tokenizer, target_model, ref_model, [x.text for x in target_member_examples], device, sequence_length=cfg.sequence_length, batch_size=cfg.batch_size)
+	tqdm.write(f"[eval] Member scores computed: {len(scores_m)} samples")
+	tqdm.write("[eval] Computing EZ scores for non-member samples...")
 	scores_nm = compute_ez_scores(tokenizer, target_model, ref_model, [x.text for x in target_nonmember_examples], device, sequence_length=cfg.sequence_length, batch_size=cfg.batch_size)
+	tqdm.write(f"[eval] Non-member scores computed: {len(scores_nm)} samples")
 	
+	tqdm.write("[eval] Computing metrics...")
 	y_eval = np.array([1]*len(scores_m) + [0]*len(scores_nm), dtype=np.int64)
 	scores = np.array(scores_m + scores_nm, dtype=np.float32)
 	scores = np.nan_to_num(scores, nan=0.0, posinf=0.0, neginf=0.0)
@@ -216,8 +240,10 @@ def run_attack(cfg: AttackConfig) -> Dict[str, Any]:
 	auc = float(roc_auc_score(y_eval, scores))
 	tpr001 = tpr_at_fpr(y_eval, scores, 0.01)
 	tpr0001 = tpr_at_fpr(y_eval, scores, 0.001)
+	tqdm.write(f"[eval] Metrics computed - AUC: {auc:.4f}, TPR@1%FPR: {tpr001:.4f}, TPR@0.1%FPR: {tpr0001:.4f}")
 
 	if cfg.save_artifacts_path:
+		tqdm.write(f"[save] Saving artifacts to {cfg.save_artifacts_path}...")
 		save_artifacts(
 			save_path=cfg.save_artifacts_path,
 			target_model=target_model,
@@ -227,8 +253,10 @@ def run_attack(cfg: AttackConfig) -> Dict[str, Any]:
 			nonmember_texts=[x.text for x in target_nonmember_examples],
 			cfg=cfg,
 		)
+	else:
+		tqdm.write("[save] No artifact path specified, skipping save")
 
-	return {
+	results = {
 		"dataset": cfg.dataset,
 		"ref_variant": cfg.ref_variant,
 		"auc": auc,
@@ -241,3 +269,5 @@ def run_attack(cfg: AttackConfig) -> Dict[str, Any]:
 		"epochs": cfg.epochs,
 		"save_artifacts_path": cfg.save_artifacts_path,
 	}
+	tqdm.write("[complete] Attack pipeline finished successfully")
+	return results
